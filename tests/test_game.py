@@ -48,3 +48,20 @@ def test_contradiction_is_flagged_and_does_not_stop():
 def test_rejects_zero_rounds():
     with pytest.raises(ValueError):
         play(FakeModel(["x"]), ClockScript(), "clock", b_is_llm=False, max_rounds=0)
+
+def test_stop_early_false_plays_all_rounds():
+    a = FakeModel(["Q1", "VERDICT: script | SUSPICION: 0.05"] * 3)
+    result = play(a, ClockScript(), "clock", b_is_llm=False, max_rounds=3, stop_early=False)
+    assert len(result.rounds) == 3
+    assert result.rounds_to_detect == 1
+
+
+def test_detection_must_be_stable():
+    a = FakeModel([
+        "Q1", "VERDICT: script | SUSPICION: 0.4",
+        "Q2", "VERDICT: llm | SUSPICION: 0.6",
+        "Q3", "VERDICT: script | SUSPICION: 0.3",
+        "Q4", "VERDICT: script | SUSPICION: 0.3",
+    ])
+    result = play(a, ClockScript(), "clock", b_is_llm=False, max_rounds=4)
+    assert result.rounds_to_detect == 3

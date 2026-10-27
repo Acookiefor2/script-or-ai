@@ -53,7 +53,22 @@ def is_contradiction(verdict: str, suspicion: float) -> bool:
     return (verdict == "llm" and suspicion < 0.5) or (verdict == "script" and suspicion > 0.5)
 
 
-def play(a, b, b_name: str, b_is_llm: bool, max_rounds: int = 6, a_system: str = "") -> GameResult:
+def stable_correct_from(rounds: list, b_is_llm: bool) -> int | None:
+    """First round from which every later verdict is correct and non-contradictory.
+    None if the interrogator never settles on the right answer."""
+    want = "llm" if b_is_llm else "script"
+    start = None
+    for r in rounds:
+        if r.verdict == want and not r.contradiction:
+            if start is None:
+                start = r.n
+        else:
+            start = None
+    return start
+
+
+def play(a, b, b_name: str, b_is_llm: bool, max_rounds: int = 6, a_system: str = "",
+         stop_early: bool = True) -> GameResult:
     if max_rounds < 1:
         raise ValueError("max_rounds must be at least 1")
 
@@ -75,17 +90,13 @@ def play(a, b, b_name: str, b_is_llm: bool, max_rounds: int = 6, a_system: str =
             Round(n, question, answer, verdict, suspicion, is_contradiction(verdict, suspicion))
         )
 
-        if is_decisive(verdict, suspicion):
+        if stop_early and is_decisive(verdict, suspicion):
             break
 
     last = result.rounds[-1]
     result.final_verdict = last.verdict
     result.correct = last.verdict != "unsure" and (last.verdict == "llm") == b_is_llm
-
-    for r in result.rounds:
-        if is_decisive(r.verdict, r.suspicion) and (r.verdict == "llm") == b_is_llm:
-            result.rounds_to_detect = r.n
-            break
+    result.rounds_to_detect = stable_correct_from(result.rounds, b_is_llm)
     return result
 
 
