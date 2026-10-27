@@ -27,3 +27,8 @@ def test_strips_commentary_before_question_tag():
 def test_verdict_lines_pass_through():
     rec = Recorder("VERDICT: script | SUSPICION: 0.2")
     assert Interrogator(rec).complete("", []) == "VERDICT: script | SUSPICION: 0.2"
+
+
+def test_strips_commentary_on_same_line():
+    rec = Recorder("Probing rigidity now.QUESTION: HELLO!!")
+    assert Interrogator(rec).complete("", []) == "HELLO!!"
