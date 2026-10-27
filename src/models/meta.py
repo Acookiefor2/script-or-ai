@@ -24,6 +24,10 @@ class BudgetExceeded(RuntimeError):
     pass
 
 
+class EmptyReply(RuntimeError):
+    pass
+
+
 def total_spent(path: str = USAGE_LOG) -> float:
     p = Path(path)
     if not p.exists():
@@ -37,17 +41,23 @@ def total_spent(path: str = USAGE_LOG) -> float:
 
 
 class MetaModel:
-    """ChatModel backed by the Meta Model API (OpenAI-compatible Chat Completions)."""
+    """ChatModel backed by the Meta Model API (OpenAI-compatible Chat Completions).
+
+    max_tokens covers reasoning + visible output, so keep it generous.
+    reasoning_effort: "minimal" is the lowest Spark supports ("none" returns HTTP 400).
+    """
 
     def __init__(self, model_id: str = "muse-spark-1.3", client=None,
                  usage_log: str = USAGE_LOG, budget_usd: float = BUDGET_USD,
-                 temperature: float | None = None, max_tokens: int | None = 600):
+                 temperature: float | None = None, max_tokens: int = 1500,
+                 reasoning_effort: str = "minimal"):
         self.name = model_id
         self.model_id = model_id
         self.usage_log = usage_log
         self.budget_usd = budget_usd
         self.temperature = temperature
         self.max_tokens = max_tokens
+        self.reasoning_effort = reasoning_effort
         self.client = client or OpenAI(base_url=BASE_URL, api_key=os.environ["MODEL_API_KEY"])
 
     def complete(self, system: str, messages: list[dict]) -> str:
@@ -55,19 +65,33 @@ class MetaModel:
             raise BudgetExceeded(f"Spent >= ${self.budget_usd}; refusing to call the API.")
 
         msgs = ([{"role": "system", "content": system}] if system else []) + messages
-        kwargs = {"model": self.model_id, "messages": msgs}
+        kwargs = {
+            "model": self.model_id,
+            "messages": msgs,
+            "max_tokens": self.max_tokens,
+            "reasoning_effort": self.reasoning_effort,
+        }
         if self.temperature is not None:
             kwargs["temperature"] = self.temperature
-        if self.max_tokens is not None:
-            kwargs["max_tokens"] = self.max_tokens
 
         resp = self.client.chat.completions.create(**kwargs)
         self._log_usage(resp)
-        return resp.choices[0].message.content or ""
+
+        choice = resp.choices[0]
+        text = choice.message.content
+        if not text:
+            raise EmptyReply(
+                f"Empty reply from {self.model_id} "
+                f"(finish_reason={getattr(choice, 'finish_reason', None)}). "
+                "Raise max_tokens or lower reasoning_effort."
+            )
+        return text
 
     def _log_usage(self, resp) -> None:
         u = resp.usage
         in_tok, out_tok = u.prompt_tokens, u.completion_tokens
+        details = getattr(u, "completion_tokens_details", None)
+        reasoning = getattr(details, "reasoning_tokens", 0) or 0
         pin, pout = PRICES.get(self.model_id, (0.0, 0.0))
         cost = (in_tok * pin + out_tok * pout) / 1_000_000  # ignores cache discount, so it overestimates
         p = Path(self.usage_log)
@@ -75,5 +99,6 @@ class MetaModel:
         with p.open("a", encoding="utf-8") as f:
             f.write(json.dumps({
                 "ts": time.time(), "model": self.model_id,
-                "input_tokens": in_tok, "output_tokens": out_tok, "cost_usd": cost,
+                "input_tokens": in_tok, "output_tokens": out_tok,
+                "reasoning_tokens": reasoning, "cost_usd": cost,
             }) + "\n")
