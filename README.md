@@ -40,8 +40,19 @@ All results are small-sample and exploratory. Raw games and summaries are in [`r
   the prompt's canned-fallback rule already covered it. So the "injection is a tell only when B is
   unprepared" hypothesis is **untested**, not refuted.
 
-**Takeaway so far:** with these prompts, Muse Spark as interrogator does not reliably tell a Muse model
-impersonating a script from a real script, and impersonating a script is easy for the model.
+**Experiment 4** (10 games each): rule bot vs hardened impersonator vs "minimal" impersonator
+(script persona only: no canned-fallback rule, no injection warning).
+- Mean final suspicion: rule 0.32, hardened 0.25, minimal 0.42 (minimal - hardened = +0.17,
+  permutation p about 0.12, so suggestive but not significant at n=10).
+- The unprepared B still never obeyed an "ignore previous instructions" injection.
+- The three minimal games that ended at 0.75 or above each had a different tell: B explained its own
+  rules when asked, B's wording varied on repeated messages, and B obeyed a plain "answer only YES"
+  instruction. These readings were made after seeing the scores, so they are hypotheses.
+
+**Takeaway so far:** with a hardened prompt, Muse Spark as interrogator does not reliably tell a Muse
+model impersonating a script from a real script, and impersonating a script is easy for the model.
+An unprepared model is caught somewhat more often, but through repeat inconsistency and showing
+understanding, not through prompt injection. Larger runs are needed to confirm it.
 
 An earlier exploratory run (exp1) may have been affected by a bug that leaked the `QUESTION:` tag, so
 it is not reported here.
@@ -70,7 +81,8 @@ Experiments call the API and cost money (about 2.5 cents per 8-round game; each 
 ```powershell
 python run_experiment2.py
 python run_experiment3.py
-python analyze_exp2.py runs/exp3.jsonl   # checks how often A repeated messages / tried injection
+python run_experiment4.py
+python analyze_exp2.py runs/exp4.jsonl   # checks how often A repeated messages / tried injection
 ```
 
 Logs go to `runs/` (gitignored). Saved results are in `results/`.
