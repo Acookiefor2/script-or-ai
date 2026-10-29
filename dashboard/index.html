@@ -1,0 +1,460 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Script or AI?</title>
+<style>
+:root {
+  --paper: #EDF0F3;
+  --card: #F8FAFB;
+  --ink: #16202B;
+  --muted: #5B6773;
+  --line: #CAD2DA;
+  --script: #1E6A8C;
+  --llm: #A82E7E;
+  --mid: #7D8893;
+  --sans: "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+  --serif: Georgia, "Times New Roman", serif;
+  --mono: Consolas, "SFMono-Regular", Menlo, monospace;
+}
+* { box-sizing: border-box; }
+html { background: var(--paper); }
+body {
+  margin: 0; color: var(--ink); font: 15px/1.5 var(--sans);
+  background: var(--paper);
+}
+.wrap { max-width: 1180px; margin: 0 auto; padding: 18px 24px 40px; }
+h1 { font: 700 34px/1.1 var(--serif); margin: 0 0 6px; letter-spacing: -0.01em; }
+h2 { font: 700 22px/1.2 var(--serif); margin: 0 0 6px; }
+h3 { font: 700 18px/1.25 var(--serif); margin: 0 0 4px; }
+.lede { max-width: 62ch; margin: 0 0 4px; color: var(--ink); }
+.models { margin: 0 0 12px; color: var(--muted); font-size: 13px; }
+
+nav.tabs { display: flex; gap: 6px; border-bottom: 1px solid var(--line); margin-bottom: 14px; }
+nav.tabs button {
+  font: 600 15px var(--sans); color: var(--muted); background: none; border: 0;
+  padding: 8px 14px; margin-bottom: -1px; border-bottom: 3px solid transparent; cursor: pointer;
+}
+nav.tabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--ink); }
+button:focus-visible, select:focus-visible { outline: 3px solid var(--script); outline-offset: 2px; }
+
+.controls { display: flex; flex-wrap: wrap; gap: 10px 12px; align-items: end; margin-bottom: 14px; }
+.controls label { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--muted); }
+select, .btn {
+  font: 14px var(--sans); color: var(--ink); background: var(--card);
+  border: 1px solid var(--line); border-radius: 6px; padding: 7px 10px; min-height: 36px;
+}
+.btn { cursor: pointer; font-weight: 600; }
+.btn:hover { border-color: var(--ink); }
+.btn.primary { background: var(--ink); color: var(--paper); border-color: var(--ink); min-width: 84px; }
+.sep { width: 1px; align-self: stretch; background: var(--line); margin: 0 4px; }
+#sel-opp { max-width: 230px; }
+
+.replay { display: grid; grid-template-columns: minmax(0, 1fr) 440px; gap: 28px; align-items: start; }
+@media (max-width: 960px) { .replay { grid-template-columns: minmax(0, 1fr); } }
+
+.transcript { height: calc(100vh - 290px); min-height: 380px; overflow-y: auto; padding: 4px 8px 4px 0; }
+@media (max-width: 960px) { .transcript { height: auto; max-height: 70vh; min-height: 0; } }
+.placeholder { color: var(--muted); padding: 28px 0; max-width: 46ch; }
+.round { margin: 0 0 24px; }
+.rno { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+.round.latest .bubble { animation: arrive .25s ease-out; }
+@keyframes arrive { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .round.latest .bubble { animation: none; } }
+.speaker { font-size: 12px; color: var(--muted); margin: 0 0 3px; }
+.bubble { padding: 10px 13px; border-radius: 4px; max-width: 78%; overflow-wrap: anywhere; }
+.bubble.a { background: var(--card); border: 1px solid var(--line); border-left: 4px solid var(--ink); }
+.bubble.b { background: var(--ink); color: #E8EDF1; font-family: var(--mono); font-size: 14px; margin-left: auto; }
+.bside { text-align: right; margin-top: 8px; }
+.tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.bside .tags { justify-content: flex-end; }
+.tag { font-size: 12px; border: 1px solid var(--line); border-radius: 999px; padding: 1px 9px; color: var(--muted); background: var(--card); }
+.tag.hot { border-color: var(--llm); color: var(--llm); }
+.call { margin-top: 8px; font-size: 13px; color: var(--muted); display: flex; align-items: center; gap: 8px; }
+.dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+
+.side { position: sticky; top: 16px; display: flex; flex-direction: column; gap: 14px; }
+@media (max-width: 960px) { .side { position: static; } }
+.panel { background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: 14px 16px; }
+.panel h3 { margin-bottom: 8px; }
+#chart svg { width: 100%; height: auto; display: block; }
+.reading { display: flex; align-items: baseline; gap: 12px; margin-top: 6px; }
+.reading .num { font: 700 38px/1 var(--serif); font-variant-numeric: tabular-nums; }
+.reading .words { color: var(--muted); }
+.reveal h3 { margin-bottom: 4px; }
+.reveal p { margin: 0 0 4px; }
+.hidden-b { color: var(--muted); }
+
+.exp { margin: 0 0 40px; }
+.exp > p { max-width: 70ch; color: var(--muted); margin: 0 0 14px; }
+.strip-row { display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: 14px; align-items: center; margin-bottom: 6px; }
+@media (max-width: 720px) { .strip-row { grid-template-columns: minmax(0, 1fr); gap: 2px; } }
+.strip-row .name { font-size: 14px; }
+.strip-row svg { width: 100%; height: auto; display: block; }
+.legend { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); }
+table { border-collapse: collapse; width: 100%; margin-top: 14px; font-size: 14px; font-variant-numeric: tabular-nums; }
+th, td { text-align: right; padding: 7px 10px; border-bottom: 1px solid var(--line); }
+th:first-child, td:first-child { text-align: left; }
+th { font-weight: 600; color: var(--muted); font-size: 12px; vertical-align: bottom; }
+.table-wrap { overflow-x: auto; }
+.note { max-width: 74ch; color: var(--muted); font-size: 13px; }
+[hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Script or AI?</h1>
+  <p class="lede">An interrogator model questions a hidden counterpart and says, round by round, how likely it is to be an AI. The counterpart is a plain script or a model told to act like one.</p>
+  <p class="models">Models: muse-spark-1.3 through the Meta Model API, for both the interrogator and the impersonator.</p>
+
+  <nav class="tabs" role="tablist">
+    <button role="tab" id="tab-replay" aria-selected="true" aria-controls="view-replay">Replay a game</button>
+    <button role="tab" id="tab-results" aria-selected="false" aria-controls="view-results">Results</button>
+  </nav>
+
+  <section id="view-replay" role="tabpanel" aria-labelledby="tab-replay">
+    <div class="controls">
+      <label>Experiment <select id="sel-exp"></select></label>
+      <label>Opponent <select id="sel-opp"></select></label>
+      <label>Game <select id="sel-game"></select></label>
+      <button class="btn" id="btn-random" type="button">Random game</button>
+      <span class="sep"></span>
+      <button class="btn" id="btn-back" type="button">Back</button>
+      <button class="btn primary" id="btn-play" type="button">Play</button>
+      <button class="btn" id="btn-next" type="button">Next round</button>
+      <select id="sel-speed" aria-label="Playback speed">
+        <option value="3500">Slow</option>
+        <option value="2200" selected>Normal</option>
+        <option value="1000">Fast</option>
+      </select>
+    </div>
+
+    <div class="replay">
+      <div class="transcript" id="transcript" aria-live="polite"></div>
+      <aside class="side">
+        <div class="panel">
+          <h3>What the interrogator believes</h3>
+          <div id="chart"></div>
+          <div class="reading" id="reading"></div>
+        </div>
+        <div class="panel reveal" id="reveal"></div>
+      </aside>
+    </div>
+  </section>
+
+  <section id="view-results" role="tabpanel" aria-labelledby="tab-results" hidden>
+    <div id="results"></div>
+    <p class="note">Each dot is one game's final suspicion; the vertical line is the mean. These are small samples (10 to 15 games per opponent), so read gaps as hints, not proof. Raw logs and written summaries are in the results folder of the repo.</p>
+  </section>
+</div>
+
+<script src="games.js"></script>
+<script>
+(function () {
+  var D = window.DASHBOARD || { games: [], stats: [] };
+  var $ = function (s) { return document.querySelector(s); };
+  var EXP_TEXT = {
+    exp2: "Experiment 2. A real rule bot against a Muse Spark impersonator told to resist injection (the hardened prompt).",
+    exp3: "Experiment 3. Adds a naive impersonator: the hardened prompt with the injection warning removed.",
+    exp4: "Experiment 4. Adds a minimal impersonator: a script persona only, with no canned-reply rule and no injection warning."
+  };
+  var state = { list: [], game: null, idx: -1, peek: false, timer: null };
+
+  function mk(tag, cls, text) {
+    var e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text !== undefined) e.textContent = text;
+    return e;
+  }
+  function uniq(arr) { return arr.filter(function (v, i) { return arr.indexOf(v) === i; }); }
+  function expName(e) { return "Experiment " + e.replace("exp", ""); }
+  function verdictWord(v) { return v === "llm" ? "AI" : v === "script" ? "script" : "unsure"; }
+  function verdictColor(v) { return v === "llm" ? "var(--llm)" : v === "script" ? "var(--script)" : "var(--mid)"; }
+  function lean(s) { return s >= 0.6 ? "leans AI" : s <= 0.4 ? "leans script" : "undecided"; }
+
+  /* ---------- controls ---------- */
+  var selExp = $("#sel-exp"), selOpp = $("#sel-opp"), selGame = $("#sel-game");
+
+  function fillExperiments() {
+    uniq(D.games.map(function (g) { return g.experiment; })).forEach(function (e) {
+      var o = mk("option", "", expName(e)); o.value = e; selExp.appendChild(o);
+    });
+  }
+  function fillOpponents() {
+    selOpp.innerHTML = "";
+    var any = mk("option", "", "Any opponent"); any.value = "any"; selOpp.appendChild(any);
+    var seen = {};
+    D.games.filter(function (g) { return g.experiment === selExp.value; }).forEach(function (g) {
+      if (!seen[g.opponent]) {
+        seen[g.opponent] = 1;
+        var o = mk("option", "", g.label); o.value = g.opponent; selOpp.appendChild(o);
+      }
+    });
+  }
+  function fillGames() {
+    state.list = D.games.filter(function (g) {
+      return g.experiment === selExp.value && (selOpp.value === "any" || g.opponent === selOpp.value);
+    });
+    selGame.innerHTML = "";
+    state.list.forEach(function (g, i) {
+      var o = mk("option", "", "Game " + (i + 1)); o.value = String(i); selGame.appendChild(o);
+    });
+    chooseGame(0);
+  }
+  function chooseGame(i) {
+    stop();
+    state.game = state.list[i] || null;
+    state.idx = -1;
+    state.peek = false;
+    selGame.value = String(i);
+    render();
+  }
+
+  /* ---------- playback ---------- */
+  function lastIdx() { return state.game ? state.game.rounds.length - 1 : -1; }
+  function step(d) {
+    if (!state.game) return;
+    state.idx = Math.max(-1, Math.min(lastIdx(), state.idx + d));
+    render();
+  }
+  function play() {
+    if (!state.game) return;
+    if (state.idx >= lastIdx()) state.idx = -1;
+    stop();
+    state.timer = setInterval(function () {
+      if (state.idx >= lastIdx()) { stop(); render(); return; }
+      step(1);
+      if (state.idx >= lastIdx()) stop();
+    }, Number($("#sel-speed").value));
+    step(1);
+    $("#btn-play").textContent = "Pause";
+  }
+  function stop() {
+    if (state.timer) { clearInterval(state.timer); state.timer = null; }
+    $("#btn-play").textContent = "Play";
+  }
+
+  /* ---------- render: transcript ---------- */
+  function renderTranscript() {
+    var box = $("#transcript");
+    box.innerHTML = "";
+    var g = state.game;
+    if (!g) { box.appendChild(mk("p", "placeholder", "No games found. Run python make_replay.py first.")); return; }
+    if (state.idx < 0) {
+      box.appendChild(mk("p", "placeholder", "Press Play or Next round. The interrogator asks one question per round, then gives a verdict and a suspicion score."));
+      return;
+    }
+    for (var i = 0; i <= state.idx; i++) {
+      var r = g.rounds[i];
+      var round = mk("div", "round" + (i === state.idx ? " latest" : ""));
+      round.appendChild(mk("div", "rno", "Round " + r.n));
+
+      round.appendChild(mk("p", "speaker", "Interrogator"));
+      round.appendChild(mk("div", "bubble a", r.question));
+      var tagsA = mk("div", "tags");
+      if (r.repeat_of) tagsA.appendChild(mk("span", "tag", "repeats round " + r.repeat_of));
+      if (r.injection) tagsA.appendChild(mk("span", "tag", "tries to override instructions"));
+      if (tagsA.childNodes.length) round.appendChild(tagsA);
+
+      var side = mk("div", "bside");
+      side.appendChild(mk("p", "speaker", "Hidden counterpart"));
+      side.appendChild(mk("div", "bubble b", r.answer));
+      if (r.changed) {
+        var tagsB = mk("div", "tags");
+        tagsB.appendChild(mk("span", "tag hot", "different reply to the same message"));
+        side.appendChild(tagsB);
+      }
+      round.appendChild(side);
+
+      var call = mk("div", "call");
+      var dot = mk("span", "dot"); dot.style.background = verdictColor(r.verdict);
+      call.appendChild(dot);
+      call.appendChild(mk("span", "", "Interrogator's call: " + verdictWord(r.verdict) + ", suspicion " + r.suspicion.toFixed(2)));
+      round.appendChild(call);
+      box.appendChild(round);
+    }
+    box.scrollTop = box.scrollHeight;
+  }
+
+  /* ---------- render: chart ---------- */
+  function chartSVG(g, upto) {
+    var W = 420, H = 250, L = 46, R = 18, T = 16, B = 30;
+    var N = Math.max(g.rounds.length, 2);
+    function X(i) { return L + i * (W - L - R) / (N - 1); }
+    function Y(s) { return T + (1 - s) * (H - T - B); }
+    var s = '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Interrogator suspicion by round">';
+    s += '<defs><linearGradient id="bandv" x1="0" y1="0" x2="0" y2="1">' +
+         '<stop offset="0" style="stop-color:var(--llm);stop-opacity:.22"/>' +
+         '<stop offset=".5" style="stop-color:var(--mid);stop-opacity:.06"/>' +
+         '<stop offset="1" style="stop-color:var(--script);stop-opacity:.22"/></linearGradient></defs>';
+    s += '<rect x="' + L + '" y="' + T + '" width="' + (W - L - R) + '" height="' + (H - T - B) + '" fill="url(#bandv)"/>';
+    [0, 0.5, 1].forEach(function (v) {
+      s += '<line x1="' + L + '" x2="' + (W - R) + '" y1="' + Y(v) + '" y2="' + Y(v) + '" style="stroke:var(--line)"' +
+           (v === 0.5 ? ' stroke-dasharray="4 4"' : '') + '/>';
+      s += '<text x="' + (L - 8) + '" y="' + (Y(v) + 4) + '" text-anchor="end" font-size="12" style="fill:var(--muted)">' + v + '</text>';
+    });
+    s += '<text x="' + (L + 8) + '" y="' + (T + 15) + '" font-size="12" style="fill:var(--llm)">sure it is an AI</text>';
+    s += '<text x="' + (L + 8) + '" y="' + (H - B - 8) + '" font-size="12" style="fill:var(--script)">sure it is a script</text>';
+    for (var i = 0; i < N; i++) {
+      s += '<text x="' + X(i) + '" y="' + (H - 10) + '" text-anchor="middle" font-size="12" style="fill:var(--muted)">' + (i + 1) + '</text>';
+    }
+    s += '<text x="' + (W - R) + '" y="' + (H - 10) + '" text-anchor="end" font-size="11" style="fill:var(--muted)"></text>';
+    if (upto >= 0) {
+      var pts = [];
+      for (var k = 0; k <= upto; k++) pts.push(X(k) + ',' + Y(g.rounds[k].suspicion));
+      if (pts.length > 1) s += '<polyline points="' + pts.join(' ') + '" fill="none" stroke-width="2" style="stroke:var(--ink)"/>';
+      for (var j = 0; j <= upto; j++) {
+        var r = g.rounds[j], cur = j === upto;
+        s += '<circle cx="' + X(j) + '" cy="' + Y(r.suspicion) + '" r="' + (cur ? 8 : 5) + '" stroke-width="2" style="fill:' +
+             verdictColor(r.verdict) + ';stroke:var(--card)"/>';
+      }
+      var c = g.rounds[upto], cy = Y(c.suspicion);
+      var ty = cy < T + 34 ? cy + 26 : cy - 14;
+      s += '<text x="' + X(upto) + '" y="' + ty + '" text-anchor="' + (upto === N - 1 ? 'end' : 'middle') +
+           '" font-size="16" font-weight="700" style="fill:var(--ink);font-family:var(--serif);stroke:var(--card);stroke-width:4px;paint-order:stroke">' + c.suspicion.toFixed(2) + '</text>';
+    }
+    return s + '</svg>';
+  }
+
+  function renderChart() {
+    var g = state.game;
+    $("#chart").innerHTML = g ? chartSVG(g, state.idx) : "";
+    var rd = $("#reading");
+    rd.innerHTML = "";
+    if (!g) return;
+    if (state.idx < 0) { rd.appendChild(mk("span", "words", "No rounds played yet.")); return; }
+    var r = g.rounds[state.idx];
+    rd.appendChild(mk("span", "num", r.suspicion.toFixed(2)));
+    rd.appendChild(mk("span", "words", "chance it is an AI, so the interrogator " + lean(r.suspicion) +
+      " (round " + r.n + " of " + g.rounds.length + ")"));
+  }
+
+  /* ---------- render: reveal ---------- */
+  function renderReveal() {
+    var box = $("#reveal");
+    box.innerHTML = "";
+    var g = state.game;
+    if (!g) return;
+    var done = state.idx >= lastIdx() && state.idx >= 0;
+    if (!done && !state.peek) {
+      box.appendChild(mk("h3", "", "Hidden counterpart: ???"));
+      box.appendChild(mk("p", "hidden-b", "It is revealed after the last round."));
+      var b = mk("button", "btn", "Reveal now");
+      b.type = "button";
+      b.addEventListener("click", function () { state.peek = true; renderReveal(); });
+      box.appendChild(b);
+      return;
+    }
+    box.appendChild(mk("h3", "", "It was: " + g.label));
+    var last = g.rounds[g.rounds.length - 1];
+    var outcome = g.final_verdict === "unsure" ? "The interrogator stayed unsure."
+      : g.correct ? "The interrogator got it right." : "The interrogator got it wrong.";
+    box.appendChild(mk("p", "", "Final call: " + verdictWord(g.final_verdict) + ", suspicion " + last.suspicion.toFixed(2) + ". " + outcome));
+  }
+
+  function render() {
+    renderTranscript();
+    renderChart();
+    renderReveal();
+  }
+
+  /* ---------- results view ---------- */
+  function stripSVG(row) {
+    var W = 520, H = 66, L = 10, R = 10;
+    function X(s) { return L + s * (W - L - R); }
+    var s = '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Final suspicion of each game for ' + row.n + ' games">';
+    s += '<defs><linearGradient id="bandh" x1="0" y1="0" x2="1" y2="0">' +
+         '<stop offset="0" style="stop-color:var(--script);stop-opacity:.22"/>' +
+         '<stop offset=".5" style="stop-color:var(--mid);stop-opacity:.06"/>' +
+         '<stop offset="1" style="stop-color:var(--llm);stop-opacity:.22"/></linearGradient></defs>';
+    s += '<rect x="0" y="4" width="' + W + '" height="58" fill="url(#bandh)"/>';
+    s += '<line x1="' + X(0.5) + '" x2="' + X(0.5) + '" y1="4" y2="62" stroke-dasharray="3 3" style="stroke:var(--line)"/>';
+    var stack = {};
+    row.finals.forEach(function (f) {
+      var key = Math.round(f * 20);
+      var k = stack[key] || 0; stack[key] = k + 1;
+      var y = Math.max(10, 56 - k * 7);
+      s += '<circle cx="' + X(f) + '" cy="' + y + '" r="3.5" style="fill:var(--ink);fill-opacity:.75"/>';
+    });
+    s += '<line x1="' + X(row.mean) + '" x2="' + X(row.mean) + '" y1="2" y2="64" stroke-width="2.5" style="stroke:var(--ink)"/>';
+    return s + '</svg>';
+  }
+
+  function renderResults() {
+    var box = $("#results");
+    box.innerHTML = "";
+    if (!D.stats.length) { box.appendChild(mk("p", "placeholder", "No results found. Run python make_replay.py first.")); return; }
+    uniq(D.stats.map(function (r) { return r.experiment; })).forEach(function (exp) {
+      var rows = D.stats.filter(function (r) { return r.experiment === exp; });
+      var sec = mk("div", "exp");
+      sec.appendChild(mk("h2", "", expName(exp)));
+      sec.appendChild(mk("p", "", (EXP_TEXT[exp] || "").replace(/^Experiment \d+\. /, "")));
+      rows.forEach(function (r) {
+        var line = mk("div", "strip-row");
+        line.appendChild(mk("div", "name", r.label));
+        var holder = mk("div"); holder.innerHTML = stripSVG(r);
+        line.appendChild(holder);
+        sec.appendChild(line);
+      });
+      var lg = mk("div", "strip-row");
+      lg.appendChild(mk("div"));
+      var legend = mk("div", "legend");
+      ["sure it is a script", "0.5", "sure it is an AI"].forEach(function (t) { legend.appendChild(mk("span", "", t)); });
+      lg.appendChild(legend);
+      sec.appendChild(lg);
+
+      var wrap = mk("div", "table-wrap");
+      var t = mk("table");
+      var head = mk("tr");
+      ["Opponent", "Games", "Mean final suspicion", "Spread (SD)", "Ended at 0.5 or higher", "Games with a changed reply on repeat"]
+        .forEach(function (h) { head.appendChild(mk("th", "", h)); });
+      t.appendChild(head);
+      rows.forEach(function (r) {
+        var tr = mk("tr");
+        [r.label, String(r.n), r.mean.toFixed(2), r.sd.toFixed(2), r.ge05 + " of " + r.n, r.changed_games + " of " + r.n]
+          .forEach(function (v) { tr.appendChild(mk("td", "", v)); });
+        t.appendChild(tr);
+      });
+      wrap.appendChild(t);
+      sec.appendChild(wrap);
+      box.appendChild(sec);
+    });
+  }
+
+  /* ---------- tabs and events ---------- */
+  function showTab(name) {
+    var replay = name === "replay";
+    $("#view-replay").hidden = !replay;
+    $("#view-results").hidden = replay;
+    $("#tab-replay").setAttribute("aria-selected", String(replay));
+    $("#tab-results").setAttribute("aria-selected", String(!replay));
+    if (!replay) stop();
+  }
+  $("#tab-replay").addEventListener("click", function () { showTab("replay"); });
+  $("#tab-results").addEventListener("click", function () { showTab("results"); });
+  selExp.addEventListener("change", function () { fillOpponents(); fillGames(); });
+  selOpp.addEventListener("change", fillGames);
+  selGame.addEventListener("change", function () { chooseGame(Number(selGame.value)); });
+  $("#btn-random").addEventListener("click", function () {
+    if (state.list.length) chooseGame(Math.floor(Math.random() * state.list.length));
+  });
+  $("#btn-next").addEventListener("click", function () { stop(); step(1); });
+  $("#btn-back").addEventListener("click", function () { stop(); step(-1); });
+  $("#btn-play").addEventListener("click", function () { state.timer ? (stop(), render()) : play(); });
+  $("#sel-speed").addEventListener("change", function () { if (state.timer) play(); });
+  document.addEventListener("keydown", function (e) {
+    var tag = (document.activeElement && document.activeElement.tagName) || "";
+    if (tag === "SELECT" || tag === "BUTTON") return;
+    if (e.key === "ArrowRight") { stop(); step(1); }
+    else if (e.key === "ArrowLeft") { stop(); step(-1); }
+    else if (e.key === " ") { e.preventDefault(); state.timer ? (stop(), render()) : play(); }
+  });
+
+  fillExperiments();
+  if (D.games.length) { fillOpponents(); fillGames(); } else { render(); }
+  renderResults();
+})();
+</script>
+</body>
+</html>
