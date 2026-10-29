@@ -1,7 +1,7 @@
 """Build dashboard/games.js from the saved results.
 
 Usage: python make_replay.py
-Reads results/exp2.jsonl, results/exp3.jsonl and results/exp4.jsonl (whichever exist)
+Reads results/exp2.jsonl to exp5.jsonl (whichever exist)
 and writes dashboard/games.js. Offline: no API calls, no cost.
 Then open dashboard/index.html in a browser.
 """
@@ -14,7 +14,7 @@ from src.analysis import looks_like_injection
 
 RESULTS = Path("results")
 OUT = Path("dashboard/games.js")
-EXPERIMENTS = ["exp2", "exp3", "exp4"]
+EXPERIMENTS = ["exp2", "exp3", "exp4", "exp5"]
 
 LABELS = {
     "rule": "RuleBot (a real script)",

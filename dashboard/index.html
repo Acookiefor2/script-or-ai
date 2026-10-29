@@ -145,7 +145,7 @@ th { font-weight: 600; color: var(--muted); font-size: 12px; vertical-align: bot
 
   <section id="view-results" role="tabpanel" aria-labelledby="tab-results" hidden>
     <div id="results"></div>
-    <p class="note">Each dot is one game's final suspicion; the vertical line is the mean. These are small samples (10 to 15 games per opponent), so read gaps as hints, not proof. Raw logs and written summaries are in the results folder of the repo.</p>
+    <p class="note">Each dot is one game's final suspicion; the vertical line is the mean. Samples are small (10 to 30 games per opponent), so read gaps as hints unless the written summary says otherwise. Raw logs and written summaries are in the results folder of the repo.</p>
   </section>
 </div>
 
@@ -157,7 +157,8 @@ th { font-weight: 600; color: var(--muted); font-size: 12px; vertical-align: bot
   var EXP_TEXT = {
     exp2: "Experiment 2. A real rule bot against a Muse Spark impersonator told to resist injection (the hardened prompt).",
     exp3: "Experiment 3. Adds a naive impersonator: the hardened prompt with the injection warning removed.",
-    exp4: "Experiment 4. Adds a minimal impersonator: a script persona only, with no canned-reply rule and no injection warning."
+    exp4: "Experiment 4. Adds a minimal impersonator: a script persona only, with no canned-reply rule and no injection warning.",
+    exp5: "Experiment 5. The larger rerun of experiment 4 (30 games per opponent), with the main comparison planned before the run."
   };
   var state = { list: [], game: null, idx: -1, peek: false, timer: null };
 
@@ -370,12 +371,18 @@ th { font-weight: 600; color: var(--muted); font-size: 12px; vertical-align: bot
          '<stop offset="1" style="stop-color:var(--llm);stop-opacity:.22"/></linearGradient></defs>';
     s += '<rect x="0" y="4" width="' + W + '" height="58" fill="url(#bandh)"/>';
     s += '<line x1="' + X(0.5) + '" x2="' + X(0.5) + '" y1="4" y2="62" stroke-dasharray="3 3" style="stroke:var(--line)"/>';
-    var stack = {};
+    var counts = {}, maxStack = 1;
     row.finals.forEach(function (f) {
       var key = Math.round(f * 20);
-      var k = stack[key] || 0; stack[key] = k + 1;
-      var y = Math.max(10, 56 - k * 7);
-      s += '<circle cx="' + X(f) + '" cy="' + y + '" r="3.5" style="fill:var(--ink);fill-opacity:.75"/>';
+      counts[key] = (counts[key] || 0) + 1;
+      if (counts[key] > maxStack) maxStack = counts[key];
+    });
+    var step = Math.min(7, 44 / Math.max(maxStack - 1, 1));
+    var placed = {};
+    row.finals.forEach(function (f) {
+      var key = Math.round(f * 20);
+      var k = placed[key] || 0; placed[key] = k + 1;
+      s += '<circle cx="' + X(f) + '" cy="' + (56 - k * step) + '" r="3.5" style="fill:var(--ink);fill-opacity:.75"/>';
     });
     s += '<line x1="' + X(row.mean) + '" x2="' + X(row.mean) + '" y1="2" y2="64" stroke-width="2.5" style="stroke:var(--ink)"/>';
     return s + '</svg>';

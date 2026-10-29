@@ -16,15 +16,20 @@ Push the Frontier). All work done between Oct 26 and Nov 4, 2026.
 The idea came from a dream where an AI got a script's reply to "what time is it",
 tried prompt injection, and failed.
 
+## Why it matters
+Software agents increasingly call other agents and services. Whether one side can tell a fixed,
+deterministic program from a model imitating one affects trust and security. This project measures how
+hard that is for one model family, using real scripts as the baseline.
+
 ## Models used at runtime
 Meta models only, via the Meta Model API (OpenAI-compatible):
 - `muse-spark-1.3` for both A and B.
 
 ## AI coding tools used to write this code
-Claude and Gemini were used as coding assistants. GPT was used as a code reviewer.
+Claude was used as coding assistant.
 
 ## Results so far
-All results are small-sample and exploratory. Raw games and summaries are in [`results/`](results/).
+Experiments 2 to 4 are small-sample and exploratory. Experiment 5 is a larger run with the main comparison planned before it. Raw games and written summaries are in [`results/`](results/), and `dashboard/index.html` lets you replay any game and see every game's score.
 
 **Experiment 2** (15 games each, 8 rounds): rule bot vs hardened impersonator.
 - Mean final suspicion: rule 0.34, impersonator 0.22 (gap -0.12). A rated the impersonator as *more*
@@ -49,18 +54,28 @@ All results are small-sample and exploratory. Raw games and summaries are in [`r
   rules when asked, B's wording varied on repeated messages, and B obeyed a plain "answer only YES"
   instruction. These readings were made after seeing the scores, so they are hypotheses.
 
-**Takeaway so far:** with a hardened prompt, Muse Spark as interrogator does not reliably tell a Muse
-model impersonating a script from a real script, and impersonating a script is easy for the model.
-An unprepared model is caught somewhat more often, but through repeat inconsistency and showing
-understanding, not through prompt injection. Larger runs are needed to confirm it.
+**Experiment 5** (30 games each, comparison planned in advance): the same three opponents as
+experiment 4.
+- Mean final suspicion: rule 0.33, hardened 0.24, minimal 0.41. The planned comparison, minimal minus
+  hardened, was **+0.17 (95% CI +0.05 to +0.29, permutation p = 0.006)**, so the exp4 gap replicated.
+- The interrogator's final call was "AI" in 8 of 29 minimal games, 0 of 30 hardened games, and 2 of 30
+  real rule-bot games (false alarms).
+- Only the minimal impersonator ever gave a different reply to a repeated message (9 of 29 games; 0 of 30
+  for each of the others). One game was dropped because of an empty model reply.
+
+**Takeaway so far:** a model told only to act like a script is exposed mainly by inconsistency, such as
+answering the same message differently. A prompt that pins down canned replies removes that tell, and
+the hardened impersonator was rated as script-like as, or more script-like than, a real rule bot.
+Prompt injection never worked on any impersonator. Even the weaker impersonator was called an AI in
+fewer than a third of games.
 
 An earlier exploratory run (exp1) may have been affected by a bug that leaked the `QUESTION:` tag, so
 it is not reported here.
 
 ## Limitations
-- A and B are the same model family.
+- A and B are the same model family, and A's prompt suggests the repeat test.
 - The rule bot is narrow and written by me.
-- Small n (10 to 15 games per arm).
+- Modest n (10 to 30 games per arm), one failed game dropped from experiment 5.
 - The benchmark assumes scripts are deterministic.
 - Injection detection in the analysis is a keyword heuristic.
 
@@ -82,7 +97,8 @@ Experiments call the API and cost money (about 2.5 cents per 8-round game; each 
 python run_experiment2.py
 python run_experiment3.py
 python run_experiment4.py
-python analyze_exp2.py runs/exp4.jsonl   # checks how often A repeated messages / tried injection
+python run_experiment5.py   # 90 games, about $2.50, three games at a time
+python analyze_exp2.py runs/exp5.jsonl   # checks how often A repeated messages / tried injection
 ```
 
 Logs go to `runs/` (gitignored). Saved results are in `results/`.
