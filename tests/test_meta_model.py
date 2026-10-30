@@ -1,3 +1,5 @@
+import json
+import threading
 from types import SimpleNamespace
 
 import pytest
@@ -49,3 +51,28 @@ def test_budget_cap_blocks_calls(tmp_path):
     m.complete("", [{"role": "user", "content": "hi"}])
     with pytest.raises(BudgetExceeded):
         m.complete("", [{"role": "user", "content": "hi"}])
+
+
+def test_total_spent_salvages_glued_lines_and_skips_broken_ones(tmp_path):
+    log = tmp_path / "usage.jsonl"
+    log.write_text('{"cost_usd": 0.5}{"cost_usd": 0.25}\n{"cost_usd": 1.0}\n{"cost\n\nnot json\n',
+                   encoding="utf-8")
+    assert total_spent(str(log)) == pytest.approx(1.75)
+
+
+def test_concurrent_calls_write_whole_lines(tmp_path):
+    log = tmp_path / "usage.jsonl"
+    m = MetaModel(client=FakeClient(), usage_log=str(log))
+
+    def run():
+        for _ in range(25):
+            m.complete("", [{"role": "user", "content": "hi"}])
+
+    threads = [threading.Thread(target=run) for _ in range(4)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    lines = [ln for ln in log.read_text(encoding="utf-8").splitlines() if ln.strip()]
+    assert len(lines) == 100
+    assert all(json.loads(ln)["cost_usd"] > 0 for ln in lines)

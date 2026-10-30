@@ -1,5 +1,6 @@
 import json
 import os
+import threading
 import time
 from pathlib import Path
 
@@ -11,6 +12,9 @@ load_dotenv()
 BASE_URL = "https://api.meta.ai/v1"
 USAGE_LOG = "runs/usage.jsonl"
 BUDGET_USD = 100.0  # hard stop, well under the $150 credit
+
+# Games can run in several threads. This lock keeps usage-log reads and writes from interleaving.
+_LOG_LOCK = threading.Lock()
 
 # USD per 1M tokens (input, output). Copied from the models page; verify on Model specs.
 PRICES = {
@@ -28,16 +32,37 @@ class EmptyReply(RuntimeError):
     pass
 
 
+def _line_cost(line: str) -> float:
+    """Sum cost_usd over the JSON objects in one log line.
+
+    A line normally holds one object. If writes ever collide, a line can hold several objects
+    glued together or be cut short, so salvage whatever parses and skip the rest.
+    """
+    decoder = json.JSONDecoder()
+    text = line.strip()
+    i, total = 0, 0.0
+    while i < len(text):
+        try:
+            obj, i = decoder.raw_decode(text, i)
+        except json.JSONDecodeError:
+            break
+        if isinstance(obj, dict):
+            try:
+                total += float(obj.get("cost_usd", 0.0) or 0.0)
+            except (TypeError, ValueError):
+                pass
+        while i < len(text) and text[i].isspace():
+            i += 1
+    return total
+
+
 def total_spent(path: str = USAGE_LOG) -> float:
     p = Path(path)
     if not p.exists():
         return 0.0
-    total = 0.0
-    with p.open(encoding="utf-8") as f:
-        for line in f:
-            if line.strip():
-                total += json.loads(line).get("cost_usd", 0.0)
-    return total
+    with _LOG_LOCK:
+        with p.open(encoding="utf-8", errors="replace") as f:
+            return sum(_line_cost(line) for line in f)
 
 
 class MetaModel:
@@ -94,11 +119,13 @@ class MetaModel:
         reasoning = getattr(details, "reasoning_tokens", 0) or 0
         pin, pout = PRICES.get(self.model_id, (0.0, 0.0))
         cost = (in_tok * pin + out_tok * pout) / 1_000_000  # ignores cache discount, so it overestimates
+        line = json.dumps({
+            "ts": time.time(), "model": self.model_id,
+            "input_tokens": in_tok, "output_tokens": out_tok,
+            "reasoning_tokens": reasoning, "cost_usd": cost,
+        }) + "\n"
         p = Path(self.usage_log)
-        p.parent.mkdir(parents=True, exist_ok=True)
-        with p.open("a", encoding="utf-8") as f:
-            f.write(json.dumps({
-                "ts": time.time(), "model": self.model_id,
-                "input_tokens": in_tok, "output_tokens": out_tok,
-                "reasoning_tokens": reasoning, "cost_usd": cost,
-            }) + "\n")
+        with _LOG_LOCK:
+            p.parent.mkdir(parents=True, exist_ok=True)
+            with p.open("a", encoding="utf-8") as f:
+                f.write(line)

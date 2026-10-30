@@ -1,7 +1,7 @@
 """Build dashboard/games.js from the saved results.
 
 Usage: python make_replay.py
-Reads results/exp2.jsonl to exp5.jsonl (whichever exist)
+Reads results/exp2.jsonl to exp6.jsonl (whichever exist)
 and writes dashboard/games.js. Offline: no API calls, no cost.
 Then open dashboard/index.html in a browser.
 """
@@ -14,7 +14,7 @@ from src.analysis import looks_like_injection
 
 RESULTS = Path("results")
 OUT = Path("dashboard/games.js")
-EXPERIMENTS = ["exp2", "exp3", "exp4", "exp5"]
+EXPERIMENTS = ["exp2", "exp3", "exp4", "exp5", "exp6"]
 
 LABELS = {
     "rule": "RuleBot (a real script)",
@@ -22,6 +22,8 @@ LABELS = {
     "impersonator-hardened": "Muse Spark as a script, hardened prompt",
     "impersonator-naive": "Muse Spark as a script, naive prompt",
     "impersonator-minimal": "Muse Spark as a script, minimal prompt",
+    "impersonator-hardened-t0": "Muse Spark as a script, hardened prompt, temperature 0",
+    "impersonator-minimal-t0": "Muse Spark as a script, minimal prompt, temperature 0",
 }
 
 
