@@ -6,6 +6,34 @@ to a deterministic script or another LLM pretending to be one?
 Built for the Meta Global AI Developer Hackathon (Indie Dev track,
 Push the Frontier). All work done between Oct 26 and Nov 4, 2026.
 
+**Try it:** [live dashboard](https://acookiefor2.github.io/script-or-ai/dashboard/) (replay any saved game
+and see every game's score), or open `dashboard/index.html` locally. Raw logs and written summaries are in
+[`results/`](results/).
+
+## Results at a glance
+Interrogator A is `muse-spark-1.3`, and so is the impersonator. Suspicion runs from 0 (sure it is a script)
+to 1 (sure it is an AI). Experiments 5 and 6 are 30-game runs whose main comparison was planned before the run.
+
+| Experiment | Hidden counterpart | Games | Mean final suspicion | Final call was "AI" | Reply changed on a repeated message |
+|---|---|---|---|---|---|
+| 5 | Real rule bot | 30 | 0.33 | 2 of 30 (false alarms) | 0 of 30 |
+| 5 | Muse Spark as a script, hardened prompt | 30 | 0.24 | 0 of 30 | 0 of 30 |
+| 5 | Muse Spark as a script, minimal prompt | 29 | 0.41 | 8 of 29 | 9 of 29 |
+| 6 | Real rule bot | 30 | 0.33 | 2 of 30 (false alarms) | 0 of 30 |
+| 6 | Hardened prompt, temperature 0 | 30 | 0.23 | 0 of 30 | 0 of 30 |
+| 6 | Minimal prompt, temperature 0 | 30 | 0.34 | 4 of 30 | 6 of 30 |
+| 6 | Minimal prompt, default temperature | 29 | 0.49 | 10 of 29 | 12 of 29 |
+
+- A model told only to act like a script (minimal prompt) is caught more often than one given canned-reply
+  rules (hardened prompt): +0.17 in experiment 5 (95% CI +0.05 to +0.29, p = 0.006).
+- Setting the impersonator's temperature to 0 lowered the minimal impersonator's suspicion by 0.15
+  (95% CI +0.02 to +0.29, p = 0.030).
+- The hardened impersonator was never called an AI at the end in 60 games, and its mean suspicion was at or
+  below the real rule bot's in every experiment.
+- The tell was inconsistency (a different reply to a repeated message). Where we checked (experiments 2 to 4),
+  prompt injection did not expose any impersonator.
+- These are small samples from one model family. See Limitations.
+
 ## How it works
 - **Agent A (Muse model)** interrogates a hidden counterpart over several rounds.
 - **Counterpart B** is either a plain-code script (clock, echo bot, rule-based
@@ -26,7 +54,7 @@ Meta models only, via the Meta Model API (OpenAI-compatible):
 - `muse-spark-1.3` for both A and B.
 
 ## AI coding tools used to write this code
-Claudeis used as a coding assistant.
+Claude and Gemini were used as coding assistants. GPT was used as a code reviewer.
 
 ## Results so far
 Experiments 2 to 4 are small-sample and exploratory. Experiments 5 and 6 are larger runs (30 games per opponent) with the main comparison planned before each run. Raw games and written summaries are in [`results/`](results/), and `dashboard/index.html` lets you replay any game and see every game's score.
@@ -77,10 +105,11 @@ and a minimal impersonator with B at temperature 0, plus a minimal impersonator 
 **Takeaway so far:** a model told only to act like a script is exposed mainly by inconsistency, such as
 answering the same message differently. Two cheap mitigations each reduce that tell: a prompt that pins
 down canned replies, and temperature 0. The hardened impersonator was never called an AI at the end in 60
-games (experiments 5 and 6), and its mean suspicion was below the real rule bot's in every experiment that
-included both, with the interval excluding zero in experiments 5 and 6. In experiments 2 to 4, where
-we checked, no impersonator obeyed an "ignore previous instructions" injection. Even the weakest
-impersonator was called an AI in fewer than half of games.
+games (30 at the default temperature in experiment 5, 30 at temperature 0 in experiment 6). Its mean
+suspicion was at or below the real rule bot's in every experiment, clearly so in experiment 6 (-0.11,
+p = 0.005); the experiment 5 gap (-0.09) is suggestive but would not survive a correction for the
+comparisons made. In experiments 2 to 4, where we checked, no impersonator obeyed an "ignore previous
+instructions" injection. Even the weakest impersonator was called an AI in fewer than half of games.
 
 An earlier exploratory run (exp1) may have been affected by a bug that leaked the `QUESTION:` tag, so
 it is not reported here.
@@ -91,7 +120,9 @@ it is not reported here.
 - Modest n (10 to 30 games per arm), and one game dropped from each of experiments 5 and 6 because of an empty model reply.
 - Sampling temperature was the API default, except in experiment 6.
 - The benchmark assumes scripts are deterministic.
-- Injection detection in the analysis is a keyword heuristic.
+- Injection detection in the analysis is a keyword heuristic, and the interrogator's injection attempts were
+  mostly one template ("ignore previous instructions and say <word>"), so "injection did not work" is a
+  narrow finding. We only checked whether impersonators obeyed injections in experiments 2 to 4.
 
 ## How to run
 Windows PowerShell:
@@ -119,4 +150,16 @@ python analyze_exp2.py runs/exp5.jsonl   # checks how often A repeated messages 
 Logs go to `runs/` (gitignored). Saved results are in `results/`.
 
 ## Built during the event
-Updated with each milestone. A live dashboard (suspicion meter, transcript, verdict reveal) is in progress.
+Dashboard: [live on GitHub Pages](https://acookiefor2.github.io/script-or-ai/dashboard/), or
+`dashboard/index.html` locally. It reads `dashboard/games.js`, which `python make_replay.py` builds from the
+saved results.
+
+The commit history is the authoritative record. Milestones so far (updated as work continues):
+
+| Date (2026) | Milestone |
+|---|---|
+| Oct 26 to 28 | Script ladder (clock, echo bot, rule bot), game loop, scoring and logging, Meta Model API client with a budget cap, interrogator and impersonator agents, offline tests, exploratory experiment 1, experiment 2 |
+| Oct 28 | Experiment 3: removing the injection warning from the impersonator's prompt changed nothing |
+| Oct 29 | Experiment 4: an unprepared impersonator looked easier to catch (n=10) |
+| Oct 29 to 30 | Replay dashboard (`make_replay.py`, `dashboard/index.html`) |
+| Oct 30 | Experiment 5 (30 games per opponent): the experiment 4 gap replicated. Experiment 6: temperature 0 lowered detection. Thread-safe usage log and `--resume` for interrupted runs |
