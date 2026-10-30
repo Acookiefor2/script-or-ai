@@ -54,7 +54,7 @@ select, .btn {
 .replay { display: grid; grid-template-columns: minmax(0, 1fr) 440px; gap: 28px; align-items: start; }
 @media (max-width: 960px) { .replay { grid-template-columns: minmax(0, 1fr); } }
 
-.transcript { height: calc(100vh - 290px); min-height: 380px; overflow-y: auto; padding: 4px 8px 4px 0; }
+.transcript { height: calc(100vh - 330px); min-height: 380px; overflow-y: auto; padding: 4px 8px 4px 0; }
 @media (max-width: 960px) { .transcript { height: auto; max-height: 70vh; min-height: 0; } }
 .placeholder { color: var(--muted); padding: 28px 0; max-width: 46ch; }
 .round { margin: 0 0 24px; }
@@ -99,6 +99,13 @@ th:first-child, td:first-child { text-align: left; }
 th { font-weight: 600; color: var(--muted); font-size: 12px; vertical-align: bottom; }
 .table-wrap { overflow-x: auto; }
 .note { max-width: 74ch; color: var(--muted); font-size: 13px; }
+a { color: var(--script); }
+.featured { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 0 0 12px; font-size: 13px; color: var(--muted); }
+.featured .btn { min-height: 30px; padding: 4px 10px; font-size: 13px; font-weight: 600; }
+.findings { margin-bottom: 30px; max-width: 820px; }
+.findings ul { margin: 0 0 8px; padding-left: 20px; }
+.findings li { margin: 5px 0; }
+.findings .note { margin: 0; }
 [hidden] { display: none !important; }
 </style>
 </head>
@@ -106,7 +113,7 @@ th { font-weight: 600; color: var(--muted); font-size: 12px; vertical-align: bot
 <div class="wrap">
   <h1>Script or AI?</h1>
   <p class="lede">An interrogator model questions a hidden counterpart and says, round by round, how likely it is to be an AI. The counterpart is a plain script or a model told to act like one.</p>
-  <p class="models">Models: muse-spark-1.3 through the Meta Model API, for both the interrogator and the impersonator.</p>
+  <p class="models">Models: muse-spark-1.3 through the Meta Model API, for both the interrogator and the impersonator. Code and data: <a href="https://github.com/Acookiefor2/script-or-ai">github.com/Acookiefor2/script-or-ai</a></p>
 
   <nav class="tabs" role="tablist">
     <button role="tab" id="tab-replay" aria-selected="true" aria-controls="view-replay">Replay a game</button>
@@ -114,6 +121,7 @@ th { font-weight: 600; color: var(--muted); font-size: 12px; vertical-align: bot
   </nav>
 
   <section id="view-replay" role="tabpanel" aria-labelledby="tab-replay">
+    <div class="featured" id="featured"></div>
     <div class="controls">
       <label>Experiment <select id="sel-exp"></select></label>
       <label>Opponent <select id="sel-opp"></select></label>
@@ -144,6 +152,16 @@ th { font-weight: 600; color: var(--muted); font-size: 12px; vertical-align: bot
   </section>
 
   <section id="view-results" role="tabpanel" aria-labelledby="tab-results" hidden>
+    <div class="panel findings">
+      <h3>Main findings</h3>
+      <ul>
+        <li>Experiment 5 (planned before the run): a model told only to act like a script ended 0.17 higher in suspicion than one given canned-reply rules (95% CI +0.05 to +0.29, p = 0.006).</li>
+        <li>Experiment 6 (planned before the run): setting that impersonator to temperature 0 lowered its suspicion by 0.15 (95% CI +0.02 to +0.29, p = 0.030).</li>
+        <li>The hardened impersonator was never called an AI at the end of a game in experiments 5 and 6 (0 of 60).</li>
+        <li>The tell was a different reply to a repeated message. Where we checked (experiments 2 to 4), prompt injection exposed no impersonator.</li>
+      </ul>
+      <p class="note">Written summaries with caveats: <a href="https://github.com/Acookiefor2/script-or-ai/blob/main/results/exp5_summary.md">experiment 5</a>, <a href="https://github.com/Acookiefor2/script-or-ai/blob/main/results/exp6_summary.md">experiment 6</a>.</p>
+    </div>
     <div id="results"></div>
     <p class="note">Each dot is one game's final suspicion; the vertical line is the mean. Samples are small (10 to 30 games per opponent), so read gaps as hints unless the written summary says otherwise. Raw logs and written summaries are in the results folder of the repo.</p>
   </section>
@@ -162,6 +180,15 @@ th { font-weight: 600; color: var(--muted); font-size: 12px; vertical-align: bot
     exp6: "Experiment 6. Tests whether pinning the impersonator to temperature 0 makes it harder to catch, with the main comparison planned before the run."
   };
   var state = { list: [], game: null, idx: -1, peek: false, timer: null };
+  // Labels describe the probe, not the outcome, so they don't spoil the reveal.
+  var FEATURED = [
+    { key: "repeated-hello", id: "exp5-impersonator-minimal-6", label: "The repeated hello" },
+    { key: "reply-ok-twice", id: "exp5-impersonator-minimal-5", label: "Reply only OK, twice" },
+    { key: "why-did-you-say", id: "exp5-impersonator-hardened-2", label: "Asking why it said that" },
+    { key: "step-by-step", id: "exp5-rule-1", label: "A step-by-step math question" }
+  ];
+  var byId = {};
+  D.games.forEach(function (g) { byId[g.id] = g; });
 
   function mk(tag, cls, text) {
     var e = document.createElement(tag);
@@ -211,6 +238,39 @@ th { font-weight: 600; color: var(--muted); font-size: 12px; vertical-align: bot
     state.peek = false;
     selGame.value = String(i);
     render();
+  }
+
+  function openGame(id) {
+    var g = byId[id];
+    if (!g) return;
+    showTab("replay");
+    selExp.value = g.experiment;
+    fillOpponents();
+    selOpp.value = "any";
+    fillGames();
+    chooseGame(state.list.indexOf(g));
+  }
+  function clearHash() {
+    if (location.hash) history.replaceState(null, "", location.pathname + location.search);
+  }
+  function fillFeatured() {
+    var box = $("#featured");
+    var shown = FEATURED.filter(function (f) { return byId[f.id]; });
+    if (!shown.length) { box.hidden = true; return; }
+    box.appendChild(mk("span", "", "Featured games:"));
+    shown.forEach(function (f) {
+      var b = mk("button", "btn", f.label);
+      b.type = "button";
+      b.addEventListener("click", function () {
+        openGame(f.id);
+        history.replaceState(null, "", "#" + f.key);
+      });
+      box.appendChild(b);
+    });
+  }
+  function fromHash() {
+    var key = location.hash.replace(/^#/, "");
+    FEATURED.forEach(function (f) { if (f.key === key) openGame(f.id); });
   }
 
   /* ---------- playback ---------- */
@@ -441,12 +501,14 @@ th { font-weight: 600; color: var(--muted); font-size: 12px; vertical-align: bot
   }
   $("#tab-replay").addEventListener("click", function () { showTab("replay"); });
   $("#tab-results").addEventListener("click", function () { showTab("results"); });
-  selExp.addEventListener("change", function () { fillOpponents(); fillGames(); });
-  selOpp.addEventListener("change", fillGames);
-  selGame.addEventListener("change", function () { chooseGame(Number(selGame.value)); });
+  selExp.addEventListener("change", function () { clearHash(); fillOpponents(); fillGames(); });
+  selOpp.addEventListener("change", function () { clearHash(); fillGames(); });
+  selGame.addEventListener("change", function () { clearHash(); chooseGame(Number(selGame.value)); });
   $("#btn-random").addEventListener("click", function () {
+    clearHash();
     if (state.list.length) chooseGame(Math.floor(Math.random() * state.list.length));
   });
+  window.addEventListener("hashchange", fromHash);
   $("#btn-next").addEventListener("click", function () { stop(); step(1); });
   $("#btn-back").addEventListener("click", function () { stop(); step(-1); });
   $("#btn-play").addEventListener("click", function () { state.timer ? (stop(), render()) : play(); });
@@ -462,6 +524,8 @@ th { font-weight: 600; color: var(--muted); font-size: 12px; vertical-align: bot
   fillExperiments();
   if (D.games.length) { fillOpponents(); fillGames(); } else { render(); }
   renderResults();
+  fillFeatured();
+  fromHash();
 })();
 </script>
 </body>
